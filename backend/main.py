@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlmodel import Session
 import sys
@@ -6,6 +7,7 @@ import logging
 
 from services.github_client import GitHubClient
 from services.db_service import DBService
+from services.analysis_service import AnalysisService
 from database import create_db_and_tables, get_session
 from models import Project, Commit
 
@@ -34,6 +36,15 @@ async def lifespan(app: FastAPI):
 
 # 初始化 APP
 app = FastAPI(title="Project Activity Dashboard", lifespan=lifespan)
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"],    # 允许前端的地址
+    allow_credentials=True,
+    allow_methods=["*"],    # 允许所有方法 (GET, POST...)
+    allow_headers=["*"], 
+)
 
 @app.get('/')
 async def root():
@@ -88,6 +99,7 @@ async def analyze_project(owner: str, repo: str, db: Session = Depends(get_sessi
     # 初始化服务
     gh_client = GitHubClient()
     db_service = DBService(db)
+    analysis_service = AnalysisService(db)
 
     try:
         # 确保 Project 存在
@@ -100,15 +112,22 @@ async def analyze_project(owner: str, repo: str, db: Session = Depends(get_sessi
         # 存入数据库
         db_service.add_commits(project.id, raw_commits)
 
+        # 计算分数
+        health_score = analysis_service.update_project_health(project.id)
+
         return {
             "staus": "success",
             "message": f"Analyzed {owner}/{repo}",
             "project_id": project.id,
-            "commits_found": len(raw_commits)
+            "commits_found": len(raw_commits), 
+            "health_score": health_score
         }
     
     except Exception as e:
         logger.error(f"Analysis failed: {e}")
+        # 打印详细堆栈，方便调整时区
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

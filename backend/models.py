@@ -21,5 +21,5 @@ class Commit(SQLModel, table=True):
     author_email: Optional[str]
     message: str
     additions: int  # 增加行数
-    additions: int  # 删除行数
+    deletions: int  # 删除行数
     committed_at: datetime
