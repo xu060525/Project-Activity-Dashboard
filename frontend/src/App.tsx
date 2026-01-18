@@ -72,7 +72,9 @@ function App() {
       }
 
       // 发送请求给后端
-      const response = await axios.get(`http://127.0.0.1:8000/api/analyze/${owner}/${repo}`)
+      // 使用环境变量，如果没读取到（比如在本地），就回退到 localhost
+      const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+      const response = await axios.get(`${API_BASE_URL}/api/analyze/${owner}/${repo}`)
       setResult(response.data)
       
     } catch (err: any) {
