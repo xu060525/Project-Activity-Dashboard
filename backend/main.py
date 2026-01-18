@@ -115,12 +115,25 @@ async def analyze_project(owner: str, repo: str, db: Session = Depends(get_sessi
         # 计算分数
         health_score = analysis_service.update_project_health(project.id)
 
+        # 准备图表数据
+        # 把raw_commits 简单处理一下返回前端
+        # 按时间排序
+        chart_data = []
+        for c in raw_commits:
+            chart_data.append({
+                "date": c["committedDate"], 
+                "additions": c["additions"], 
+                "deletions": c["deletions"], 
+                "author": c["author"]["name"] or "Unknown"
+            })
+
         return {
             "staus": "success",
             "message": f"Analyzed {owner}/{repo}",
             "project_id": project.id,
             "commits_found": len(raw_commits), 
-            "health_score": health_score
+            "health_score": health_score, 
+            "history": chart_data, 
         }
     
     except Exception as e:
