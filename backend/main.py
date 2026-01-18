@@ -1,20 +1,30 @@
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
 from sqlmodel import Session
+import sys
 import logging
 
 from services.github_client import GitHubClient
+from services.db_service import DBService
 from database import create_db_and_tables, get_session
 from models import Project, Commit
 
-# 配置日志格式
-logging.basicConfig(
-    level=logging.INFO, # 默认级别：只显示INFO及以上
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
+# 创建一个 logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-logger = logging.getLogger("api")   # 给你的应用起个名字
+# 格式器
+formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+# 1. 输出到控制台 (StreamHandler)
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+
+# 2. 输出到文件 (FileHandler)
+file_handler = logging.FileHandler("app.log", encoding="utf-8") # 文件名叫 app.log
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 # 生命周期管理器：应用是启动创建表
 @asynccontextmanager
@@ -66,6 +76,40 @@ async def get_commits(owner: str, repo: str):
         import traceback
         traceback.print_exc()   # 打印报错详情到后台
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/analyze/{owner}/{repo}")
+async def analyze_project(owner: str, repo: str, db: Session = Depends(get_session)):
+    """
+    触发一次完整的分析流程：
+    1. 拉取 GitHub 数据
+    2. 存入数据库
+    3. 返回分析结果
+    """
+    # 初始化服务
+    gh_client = GitHubClient()
+    db_service = DBService(db)
+
+    try:
+        # 确保 Project 存在
+        project_url = f"https://github.com/{owner}/{repo}"
+        project = db_service.create_or_update_project(owner, repo, project_url)
+
+        # 拉取数据
+        raw_commits = await gh_client.fetch_commits_graphql(owner, repo, limit=50)
+
+        # 存入数据库
+        db_service.add_commits(project.id, raw_commits)
+
+        return {
+            "staus": "success",
+            "message": f"Analyzed {owner}/{repo}",
+            "project_id": project.id,
+            "commits_found": len(raw_commits)
+        }
+    
+    except Exception as e:
+        logger.error(f"Analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/ping")
