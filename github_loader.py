@@ -14,19 +14,20 @@ class GitHubLoader:
             "Accept": "application/vnd.github.v3 + json"
         }
 
-    def fetch_commits(self, repo_name, limit=100):
+    def fetch_commits(self, repo_name, limit=100, since_date=None):
         """
         获取指定仓库的 commit 列表，处理分页
         
         :param repo_name: 例如 'pandas-dev/pandas'
         :param limit: 限制或取得条数 （防止是 Linux 内核，把内存撑爆）
+        :param since_date: ISO 8601 格式时间字符串 (e.g. '2026-01-01T00:00:00Z')
         :return: commits 列表
         """
         commits = []
         page = 1
         per_page = 100  # GitHub API 最大允许每页 100 条
 
-        print(f"Start fetching commits for {repo_name} ...")
+        print(f"Start fetching {repo_name} (Since: {since_date})...")
 
         while len(commits) < limit:
             try: 
@@ -35,6 +36,10 @@ class GitHubLoader:
                     "per_page": per_page, 
                     "page": page, 
                 }
+                # 如果传入了时间，加到参数里
+                if since_date:
+                    params['since'] = since_date
+                
                 url = f"{self.BASE_URL}/repos/{repo_name}/commits"
 
                 # 发送请求
