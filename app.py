@@ -1,6 +1,8 @@
+import altair as alt
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+
 
 from github_loader import GitHubLoader
 from db_manager import DBManager
@@ -70,9 +72,112 @@ if st.button("Analyze Project"):
             st.success(f"Analysis Ready! Total Commits in DA: {len(df)} ")
             st.dataframe(df)
 
-            # 画个简单的趋势图
-            st.line_chart(df['date'].value_counts())
+            # === 数据处理 ===
+
+            # 确保 date 列是 datetime 类型
+            df['date'] = pd.to_datetime(df['date'], utc=True)
+
+            # 设置 date 为索引，方便后续按时间切片
+            df.set_index('date', inplace=True)
+
+            # 排序（从旧到新）
+            df.sort_index(inplace=True)
+
+            # === 绘制图表 ===
+
+            st.divider()    # 分割线
+            st.subheader("Project Overview")
+
+            # 创建 3 列布局
+            col1, col2, col3 = st.columns(3)
+
+            # 指标 1: 总提交书
+            total_commits = len(df)
+            col1.metric("Total Commits", total_commits)
+
+            # 指标 2: 活跃贡献者人数
+            unique_authors = df['author'].nunique()
+            col2.metric("Contributors", unique_authors)
+
+            # 指标 3: 项目跨度（天）
+            if not df.empty:
+                duration = (df.index.max() - df.index.min()).days
+                col3.metric("Active Days", f"{duration} days")
+
+            st.subheader("Activity Trend (Weekly)")
+
+            # Pandas 魔法：resample('W') = 按周聚合
+            # count() = 计算这一周有多少行
+            weekly_commits = df.resample('W')['sha'].count()
+
+            # 画折线图
+            st.line_chart(weekly_commits)
+
+            # 统计周一到周日的提交分布
+            st.subheader("Work Rhythm (Day of Week)")
+
+            # 1. 提取星期几
+            # df.index 是 datetime 类型，直接有 day_name() 方法
+            day_counts = df.index.day_name().value_counts()
+
+            # 【Debug 探针 1】打印原始索引看看长什么样
+            st.write("Debug - Raw Index:", day_counts.index.tolist())
+
+            # 排序
+            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            # reindex 会按照我们制定的列表顺序重新排列数据
+            day_counts = day_counts.reindex(days_order, fill_value=0)
+
+            chart_data = day_counts.reset_index()
+            chart_data.columns = ['Day', 'Commits']
+
+            # 构建一个绝对听话的图表
+            c = alt.Chart(chart_data).mark_bar().encode(
+                # sort=days_order: 强制按照我们要的顺序排 X 轴
+                x=alt.X('Day', sort=days_order),
+                y='Commits',
+                tooltip=['Day', 'Commits']
+            )
+
+            # 3. 画图
+            st.altair_chart(c, width='stretch')
+            
+            # 4. 自动洞察 (Bonus)
+            weekend_commits = day_counts['Saturday'] + day_counts['Sunday']
+            total = day_counts.sum()
+            weekend_ratio = weekend_commits / total
+            
+            if weekend_ratio > 0.3:
+                st.info(f"High Weekend Activity ({weekend_ratio:.1%}). Looks like a hobby/side project.")
+            else:
+                st.success(f"Professional Workflow. Most commits happen on weekdays.")
+            
+            # 自动解释 (简单的规则引擎)
+            last_4_weeks = weekly_commits.tail(4).mean()
+            if last_4_weeks > weekly_commits.mean():
+                st.success(f"Trending Up! Average {last_4_weeks:.1f} commits/week recently.")
+            else:
+                st.info(f"Cooling Down. Average {last_4_weeks:.1f} commits/week recently.")
                
+            st.subheader("Top Contributors")
+
+            # 1. 准备数据
+            author_counts = df['author'].value_counts().head(10)
+            author_df = author_counts.reset_index()
+            author_df.columns = ['Author', 'Commits']
+            
+            # 2. 使用 Altair 画图
+            c = alt.Chart(author_df).mark_bar().encode(
+                # x 轴：显示 Author 名字
+                # sort='-y': 这是一个神奇的指令。意思是 "按 Y 轴的值倒序排列 X 轴"
+                x=alt.X('Author', sort='-y'), 
+                y='Commits',
+                # 顺便加个颜色，让图表不那么单调
+                color=alt.Color('Commits', legend=None),
+                tooltip=['Author', 'Commits']
+            )
+            
+            st.altair_chart(c, use_container_width=True)
 
         except Exception as e:
             st.error(f"Error: {e}")
