@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 
+from github_loader import GitHubLoader
+
 # 设置页面标题
 st.title("Project Activity Dashboard")
-st.write("Day 0 Check: Enviroment is ready!")
 
 # 安全检查
 st.subheader("Security Check")
@@ -11,23 +12,50 @@ try:
     # st.secrets 就像一个字典，专门读取 secrets.toml 里的内容
     token = st.secrets["GITHUB_TOKEN"]
 
-    # 只显示前四位，后面用星号代替
-    masked_token = token[:4] + "*" * (len(token) - 4)
+except:
+    st.error("Please config your Token in .streamlit/secrets.toml !")
+    st.stop()
 
-    st.success(f"GitHub Token loaded successfully: {masked_token[:10]} ...")
-    st.info("The app can now safely access GitHub API on your behalf.")
+# 用户输入
+repo_name = st.text_input("Enter Repository Name (e.g., streamlit/streamlit)", "streamlit/streamlit")
+fetch_btn = st.button("Fetch Data")
 
-except FileNotFoundError:
-    st.error("secrets.toml not found!")
+if fetch_btn:
+    # 初始化加载器
+    loader = GitHubLoader(token)
 
-except KeyError:
-    st.error("GITHUB_TOKEN not defined in secrets.toml")
+    with st.spinner(f"Fetching data from {repo_name} ..."):
+        try:
+            # 这里调用我们写的后端逻辑
+            raw_commits = loader.fetch_commits(repo_name, limit=200)
+        
+        except Exception as e:
+            st.error(f"Failed: {e}")
+            st.stop() # 停止后续代码执行
 
-# 模拟一个简单的数据表
-st.subheader("UI Test")
-df = pd.DataFrame({
-    'Committer': ['Alice', 'Bob', 'Charlie'], 
-    'Commits': [10, 20, 30], 
-})
+    # 展示结果
+    if raw_commits:
+        st.success(f"Successfully fetched {len(raw_commits)} commits!")
 
-st.bar_chart(df.set_index('Committer'))
+        # 简单的数据清洗，只取我们需要的信息展示
+        # 列表推导式 (List Comprehension) - Python 必会技巧
+        data = []
+        for c in raw_commits:
+            data.append({
+                "sha": c['sha'][:7],
+                "author": c['commit']['author']['date'],
+                "date": c['commit']['author']['date'], 
+                "message": c['commit']['message'],
+                "comments": c['commit']['comment_count'], 
+            })
+
+        df = pd.DataFrame(data)
+
+        # 展示表格
+        st.dataframe(df)
+
+        # 简单统计
+        st.write(f"Unique Authors: {df['author'].nunique()}")
+
+    else:
+        st.warning("No commits found or repository does noe exist.")
