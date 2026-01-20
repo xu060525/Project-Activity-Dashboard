@@ -58,7 +58,7 @@ if st.button("Analyze Project"):
 
             # 存入数据库
             if cleaned_data:
-                db.sane_commits(repo_name, cleaned_data)
+                db.save_commits(repo_name, cleaned_data)
 
             # 从数据库读取全量数据
             all_commits = db.get_all_commits(repo_name)

@@ -61,7 +61,7 @@ class DBManager:
         """获取该仓库在数据库里最新一条 commit 的时间"""
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT data FROM commits
+            SELECT date FROM commits
             WHERE repo_name = ?
             ORDER BY date DESC
             LIMIT 1

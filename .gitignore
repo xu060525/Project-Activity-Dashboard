@@ -8,6 +8,7 @@ venv/
 
 # 本地数据与配置 (隐私！)
 data/
+data/project_data.db
 *.db
 .streamlit/
 secrets.toml
