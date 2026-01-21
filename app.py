@@ -6,6 +6,7 @@ from datetime import datetime
 
 from github_loader import GitHubLoader
 from db_manager import DBManager
+from score_calculator import calculate_health_score
 
 # === 初始化 ===
 # 设置页面标题
@@ -178,6 +179,30 @@ if st.button("Analyze Project"):
             )
             
             st.altair_chart(c, use_container_width=True)
+
+            st.divider()
+
+            # 计算分数
+            score, reasons = calculate_health_score(df)
+
+            # 使用 Streamlit 的列布局展示分数
+            score_col, reason_col = st.columns([1, 2])
+
+            with score_col:
+                color = "green" if score >= 80 else "orange" if score >= 50 else "red"
+                st.markdown(f"""
+                    <div style="text-align: center;"
+                        <h3 style="margin:0;">Project Health</h3>
+                        <h1 style="color: {color}; font-size: 72px; margin:0;">{score}</h1>)
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+            with reason_col:
+                st.subheader("Analysis Report")
+                for reason in reasons:
+                    st.write(reason)
+
+            st.divider()
 
         except Exception as e:
             st.error(f"Error: {e}")
