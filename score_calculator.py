@@ -32,7 +32,7 @@ def calculate_health_score(df):
     score += activity_score
 
     # --- 社区评分 ---
-    unique_authors = df['author'].unique()
+    unique_authors = df['author'].nunique()
     
     # 计算头号贡献者的占比
     # value_counts(normalize=True) 直接返回百分比 (0.0 - 1.0)

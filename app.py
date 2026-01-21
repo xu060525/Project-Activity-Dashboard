@@ -1,6 +1,7 @@
 import altair as alt
 import streamlit as st
 import pandas as pd
+import traceback
 from datetime import datetime
 
 
@@ -121,9 +122,6 @@ if st.button("Analyze Project"):
             # df.index 是 datetime 类型，直接有 day_name() 方法
             day_counts = df.index.day_name().value_counts()
 
-            # 【Debug 探针 1】打印原始索引看看长什么样
-            st.write("Debug - Raw Index:", day_counts.index.tolist())
-
             # 排序
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             # reindex 会按照我们制定的列表顺序重新排列数据
@@ -193,7 +191,7 @@ if st.button("Analyze Project"):
                 st.markdown(f"""
                     <div style="text-align: center;"
                         <h3 style="margin:0;">Project Health</h3>
-                        <h1 style="color: {color}; font-size: 72px; margin:0;">{score}</h1>)
+                        <h1 style="color: {color}; font-size: 72px; margin:0;">{score}</h1>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -206,4 +204,6 @@ if st.button("Analyze Project"):
 
         except Exception as e:
             st.error(f"Error: {e}")
-            st.stop() # 停止后续代码执行
+
+            st.write("Check your terminal for details.") 
+            traceback.print_exc()
