@@ -24,7 +24,8 @@ class DBManager:
                 date TEXT, 
                 message TEXT, 
                 additions INTEGER, 
-                deletions INTEGER
+                deletions INTEGER,
+                category TEXT
             )
         ''')
         self.conn.commit()
@@ -42,11 +43,12 @@ class DBManager:
                 # INSERT OR IGNORE: 如果 sha 已存在，就跳过，不报错
                 cursor.execute('''
                     INSERT OR IGNORE INTO commits
-                    (sha, repo_name, author, date, message, additions, deletions)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (sha, repo_name, author, date, message, additions, deletions, category)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     c['sha'], repo_name, c['author'], c['date'], 
-                    c['message'], c.get('additions', 0), c.get('deletions', 0)
+                    c['message'], c.get('additions', 0), c.get('deletions', 0), 
+                    c.get('category', 'Other')
                 ))
                 if cursor.rowcount > 0:
                     count += 1
@@ -73,14 +75,14 @@ class DBManager:
         """读取该仓库所有本地数据"""
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT sha, author, date, message, additions, deletions
+            SELECT sha, author, date, message, additions, deletions, category
             FROM commits
             WHERE repo_name = ?
             ORDER BY date DESC
         ''', (repo_name,))
 
         # 转成字典列表返回
-        cols = ['sha', 'author', 'date', 'message', 'additions', 'deletions']
+        cols = ['sha', 'author', 'date', 'message', 'additions', 'deletions', 'category']
         return [dict(zip(cols, row)) for row in cursor.fetchall()]
     
     def close(self):

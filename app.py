@@ -8,6 +8,7 @@ from datetime import datetime
 from github_loader import GitHubLoader
 from db_manager import DBManager
 from score_calculator import calculate_health_score
+from classifier import CommitClassifier
 
 # === 初始化 ===
 # 设置页面标题
@@ -24,8 +25,8 @@ except:
 
 # 初始化加载器
 loader = GitHubLoader(token)
-
 db = DBManager()
+classifier = CommitClassifier()
 
 # === 用户输入 ===
 repo_name = st.text_input("Enter Repository Name", "pandas-dev/pandas")
@@ -48,6 +49,11 @@ if st.button("Analyze Project"):
             # 数据清洗
             cleaned_data = []
             for c in new_commits_raw:
+                message = c['commit']['message']
+
+                # 调用分类器
+                category = classifier.classify(message)
+
                 cleaned_data.append({
                     "sha": c['sha'],    # 保持原始长 hash
                     "author": c['commit']['author']['name'],
@@ -57,7 +63,8 @@ if st.button("Analyze Project"):
                     # 要获取详细 stats 需要单条查询，这很慢
                     # MVP 阶段我们先填 0, 或者只用 commit count
                     "additions": 0, 
-                    "deletions": 0
+                    "deletions": 0,
+                    "category": category
                 })
 
             # 存入数据库
@@ -201,6 +208,44 @@ if st.button("Analyze Project"):
                     st.write(reason)
 
             st.divider()
+            st.subheader("AI Intent Analysis")
+
+            # 统计分类
+            type_counts = df['category'].value_counts()
+
+            # 使用 Plotly 画个环形图，使用 Altair 画饼图
+            type_df = type_counts.reset_index()
+            type_df.columns = ['Category', 'Count']
+
+            base = alt.Chart(type_df).encode(
+                theta=alt.Theta("Count", stack=True)
+            )
+
+            pie = base.mark_arc(outerRadius=120).encode(
+                color=alt.Color("Category"),
+                order=alt.Order("Count", sort="descending"), 
+                tooltip=["Category", "Count"]
+            )
+
+            st.altair_chart(pie, use_container_width=True)
+
+            # 解读
+            top_category = type_df.iloc[0]['Category']
+            if top_category == 'Bugfix':
+                st.info("High maintenance effort etected (Focus on Bugfix).")
+            elif top_category == 'Feature':
+                st.success("Active development phase (Focus on Features).")
+
+            # 计算 Other 的占比
+            other_count = type_df[type_df['Category'] == 'Other']['Count'].sum()
+            total_count = type_df['Count'].sum()
+            ratio = other_count / total_count if total_count > 0 else 0
+            
+            # 展示警告
+            if ratio > 0.3:
+                st.warning(f"Unclassified Ratio: {ratio:.1%}. The commit messages are a bit messy, which might affect AI accuracy.")
+            else:
+                st.caption(f"Data Quality is good. Unclassified: {ratio:.1%}")
 
         except Exception as e:
             st.error(f"Error: {e}")
