@@ -94,7 +94,6 @@ if st.button("Analyze Project"):
 # === 逻辑块 B：展示数据 (Data Visualization) ===
 # 只要 Session State 里有数据，这部分代码就会运行。
 # 无论你是刚点完 "Analyze"，还是点了 "AI Report"，这里都会执行！
-# === 逻辑块 B：展示数据 (Data Visualization) ===
 if st.session_state['data'] is not None:
     
     # 使用副本，防止修改原始数据
@@ -111,7 +110,7 @@ if st.session_state['data'] is not None:
         st.success(f"Analysis Ready for {repo_name}! Total Commits: {len(df)}")
         
         # === Day 3 新增: 使用 Tabs 组织布局 ===
-        tab_overview, tab_deep_dive, tab_intent = st.tabs(["🚀 Overview", "📈 Deep Dive", "🧠 Intent Analysis"])
+        tab_overview, tab_deep_dive, tab_intent = st.tabs(["Overview", "Deep Dive", "Intent Analysis"])
         
         # 计算一些通用指标 (复用)
         total_commits = len(df)
