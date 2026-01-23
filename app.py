@@ -94,15 +94,15 @@ if st.button("Analyze Project"):
 # === 逻辑块 B：展示数据 (Data Visualization) ===
 # 只要 Session State 里有数据，这部分代码就会运行。
 # 无论你是刚点完 "Analyze"，还是点了 "AI Report"，这里都会执行！
+# === 逻辑块 B：展示数据 (Data Visualization) ===
 if st.session_state['data'] is not None:
     
-    # 从缓存取出数据
+    # 使用副本，防止修改原始数据
     df = st.session_state['data'].copy()
-    repo_name = st.session_state['current_repo'] # 使用锁定的仓库名
+    repo_name = st.session_state['current_repo']
 
     try:
-        # === 数据预处理 (每次渲染前做一次即可) ===
-        # 确保 date 列是 datetime 类型
+        # === 数据预处理 ===
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], utc=True)
             df.set_index('date', inplace=True)
@@ -110,151 +110,151 @@ if st.session_state['data'] is not None:
 
         st.success(f"Analysis Ready for {repo_name}! Total Commits: {len(df)}")
         
-        # ---------------- 下面是你原来的画图代码 (缩进调整到这里) ----------------
+        # === Day 3 新增: 使用 Tabs 组织布局 ===
+        tab_overview, tab_deep_dive, tab_intent = st.tabs(["🚀 Overview", "📈 Deep Dive", "🧠 Intent Analysis"])
         
-        st.divider()
-        st.subheader("Project Overview")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Commits", len(df))
-        col2.metric("Contributors", df['author'].nunique())
-        if not df.empty:
-            duration = (df.index.max() - df.index.min()).days
-            col3.metric("Active Days", f"{duration} days")
-
-        st.subheader("Activity Trend (Weekly)")
-        weekly_commits = df.resample('W')['sha'].count()
-        st.line_chart(weekly_commits)
-
-        # Work Rhythm
-        st.subheader("Work Rhythm (Day of Week)")
-        day_counts = df.index.day_name().value_counts()
-        days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        day_counts = day_counts.reindex(days_order, fill_value=0)
-        chart_data = day_counts.reset_index()
-        chart_data.columns = ['Day', 'Commits']
-        
-        c = alt.Chart(chart_data).mark_bar().encode(
-            x=alt.X('Day', sort=days_order),
-            y='Commits',
-            tooltip=['Day', 'Commits']
-        )
-        st.altair_chart(c, use_container_width=True) # width='stretch' deprecated, use this
-        
-        # Weekend Ratio
-        weekend_commits = day_counts['Saturday'] + day_counts['Sunday']
-        total = day_counts.sum()
-        weekend_ratio = weekend_commits / total if total > 0 else 0
-        if weekend_ratio > 0.3:
-            st.info(f"High Weekend Activity ({weekend_ratio:.1%}). Hobby project?")
-        else:
-            st.success(f"Professional Workflow. Weekday focus.")
-
-        # Top Contributors
-        st.subheader("Top Contributors")
-        author_counts = df['author'].value_counts().head(10)
-        author_df = author_counts.reset_index()
-        author_df.columns = ['Author', 'Commits']
-        c = alt.Chart(author_df).mark_bar().encode(
-            x=alt.X('Author', sort='-y'), 
-            y='Commits',
-            color=alt.Color('Commits', legend=None),
-            tooltip=['Author', 'Commits']
-        )
-        st.altair_chart(c, use_container_width=True)
-
-        st.divider()
-
-        # Health Score
+        # 计算一些通用指标 (复用)
+        total_commits = len(df)
+        contributors = df['author'].nunique()
+        duration = (df.index.max() - df.index.min()).days if not df.empty else 0
         score, reasons = calculate_health_score(df)
-        score_col, reason_col = st.columns([1, 2])
-        with score_col:
-            color = "green" if score >= 80 else "orange" if score >= 50 else "red"
-            st.markdown(f"""
-                <div style="text-align: center;">
-                    <h3 style="margin:0;">Project Health</h3>
-                    <h1 style="color: {color}; font-size: 72px; margin:0;">{score}</h1>
-                </div>
+        
+        # --- Tab 1: Overview (总览) ---
+        with tab_overview:
+            # 1. 核心指标卡片
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Commits", total_commits)
+            col2.metric("Contributors", contributors)
+            col3.metric("Active Days", f"{duration} days")
+            
+            st.divider()
+            
+            # 2. 健康度评分 (左) + AI 报告 (右)
+            col_score, col_ai = st.columns([1, 2])
+            
+            with col_score:
+                st.subheader("Health Score")
+                color = "green" if score >= 80 else "orange" if score >= 50 else "red"
+                st.markdown(f"""
+                    <div style="text-align: center; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                        <h1 style="color: {color}; font-size: 80px; margin:0;">{score}</h1>
+                        <p>Out of 100</p>
+                    </div>
                 """, unsafe_allow_html=True)
-        with reason_col:
-            st.subheader("Analysis Report")
-            for reason in reasons:
-                st.write(reason)
-
-        st.divider()
-
-        # === AI 部分 ===
-        st.subheader("AI Intent Analysis")
-
-        type_counts = df['category'].value_counts()
-        intent_dist = type_counts.to_dict()
-        is_risky = (len(reasons) > 0 and "Risk" in reasons[-1])
-
-        # 【重点】现在这个按钮在 st.session_state['data'] 的保护下
-        # 点击它，页面刷新，但上面的 if st.session_state... 依然成立
-        # 所以图表不会消失！
-        if st.button("Generate AI Report"):
-            try:
-                api_key = st.secrets["DEEPSEEK_API_KEY"]
-                analyst = AIAnalyst(api_key)
-                report_box = st.empty()
-                full_response = ""
-
                 
-                with st.spinner("AI is thinking..."):
-                    stream = analyst.generate_assessment(
-                        repo_name=repo_name, 
-                        health_score=score, 
-                        bus_factor_risk=is_risky, 
-                        intent_dist=intent_dist
-                    )
+                # 显示简单的扣分原因
+                with st.expander("View Score Details"):
+                    for reason in reasons:
+                        st.write(reason)
 
+            with col_ai:
+                st.subheader("AI CTO Diagnosis")
+                
+                # 准备 AI 数据
+                type_counts = df['category'].value_counts()
+                intent_dist = type_counts.to_dict()
+                is_risky = (len(reasons) > 0 and "Risk" in reasons[-1])
+                
+                # 计算趋势
+                weekly_commits = df.resample('W')['sha'].count()
+                if len(weekly_commits) >= 4:
+                    recent_avg = weekly_commits.tail(4).mean()
+                    total_avg = weekly_commits.mean()
+                    trend = "Rising" if recent_avg > total_avg * 1.2 else "Falling" if recent_avg < total_avg * 0.5 else "Stable"
+                else:
+                    trend = "Unknown"
 
-
-                    
-                    # 【调试关键】先检查 stream 是不是字符串（如果是，说明 analyst 内部报错返回了 str）
-                    if isinstance(stream, str):
-                        st.error(stream)
-                        st.stop()
-
-
-                    # 正常的流式处理
-                    for chunk in stream:
-
-                        # 增加一层保护：检查 chunk 是否有效
-                        if chunk and chunk.choices:
-                            delta = chunk.choices[0].delta
-                            # 有些 SDK 版本 delta.content 可能是 None
-                            if delta.content:
-                                full_response += delta.content
-                                report_box.markdown(full_response + "▌")
+                # 缓存逻辑 (Day 2 作业成果)
+                if 'ai_reports' not in st.session_state:
+                    st.session_state['ai_reports'] = {}
+                current_report = st.session_state['ai_reports'].get(repo_name, "")
+                
+                if current_report:
+                    st.info(current_report)
+                    if st.button("Regenerate Diagnosis", key="regen_btn"):
+                        st.session_state['ai_reports'][repo_name] = ""
+                        st.rerun()
+                else:
+                    if st.button("Generate AI Report", key="gen_btn"):
+                        try:
+                            api_key = st.secrets["DEEPSEEK_API_KEY"]
+                            analyst = AIAnalyst(api_key)
+                            with st.spinner("AI is analyzing..."):
+                                stream = analyst.generate_assessment(repo_name, score, is_risky, intent_dist, trend)
                                 
-                    report_box.markdown(full_response)
+                                # 非流式处理 (如果 ai_analyst 改了的话) 或 流式处理
+                                # 这里假设你用的是 Day 2 的流式代码
+                                report_box = st.empty()
+                                full_resp = ""
+                                if isinstance(stream, str):
+                                    st.error(stream)
+                                else:
+                                    for chunk in stream:
+                                        if chunk.choices and chunk.choices[0].delta.content:
+                                            full_resp += chunk.choices[0].delta.content
+                                            report_box.markdown(full_resp + "▌")
+                                    
+                                    report_box.markdown(full_resp)
+                                    st.session_state['ai_reports'][repo_name] = full_resp
+                        except Exception as e:
+                            st.error(f"AI Error: {e}")
 
-   
-            except KeyError:
-                st.error("Missing DEEPSEEK_API_KEY in secrets.toml")
-            except Exception as e:
-                st.error(f"AI Error: {e}")
+        # --- Tab 2: Deep Dive (深度分析) ---
+        with tab_deep_dive:
+            st.subheader("Commit Activity")
+            st.line_chart(weekly_commits)
+            
+            col_d1, col_d2 = st.columns(2)
+            
+            with col_d1:
+                st.subheader("Work Rhythm")
+                day_counts = df.index.day_name().value_counts()
+                days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                day_counts = day_counts.reindex(days_order, fill_value=0).reset_index()
+                day_counts.columns = ['Day', 'Commits']
+                
+                c = alt.Chart(day_counts).mark_bar().encode(
+                    x=alt.X('Day', sort=days_order), y='Commits', tooltip=['Day', 'Commits']
+                )
+                st.altair_chart(c, use_container_width=True)
+                
+            with col_d2:
+                st.subheader("Top Contributors")
+                author_counts = df['author'].value_counts().head(10).reset_index()
+                author_counts.columns = ['Author', 'Commits']
+                
+                c2 = alt.Chart(author_counts).mark_bar().encode(
+                    x=alt.X('Author', sort='-y'), y='Commits', color=alt.Color('Commits', legend=None)
+                )
+                st.altair_chart(c2, use_container_width=True)
 
-        # Pie Chart
-        type_df = type_counts.reset_index()
-        type_df.columns = ['Category', 'Count']
-        base = alt.Chart(type_df).encode(theta=alt.Theta("Count", stack=True))
-        pie = base.mark_arc(outerRadius=120).encode(
-            color=alt.Color("Category"),
-            order=alt.Order("Count", sort="descending"), 
-            tooltip=["Category", "Count"]
-        )
-        st.altair_chart(pie, use_container_width=True)
-
-        # Unclassified Ratio logic...
-        other_count = type_df[type_df['Category'] == 'Other']['Count'].sum()
-        total_count = type_df['Count'].sum()
-        ratio = other_count / total_count if total_count > 0 else 0
-        if ratio > 0.3:
-            st.warning(f"Unclassified Ratio: {ratio:.1%}. Messy messages.")
-        else:
-            st.caption(f"Data Quality is good. Unclassified: {ratio:.1%}")
+        # --- Tab 3: Intent Analysis (意图分析) ---
+        with tab_intent:
+            col_i1, col_i2 = st.columns([2, 1])
+            
+            with col_i1:
+                st.subheader("Category Distribution")
+                type_df = type_counts.reset_index()
+                type_df.columns = ['Category', 'Count']
+                
+                base = alt.Chart(type_df).encode(theta=alt.Theta("Count", stack=True))
+                pie = base.mark_arc(outerRadius=120).encode(
+                    color=alt.Color("Category"),
+                    order=alt.Order("Count", sort="descending"),
+                    tooltip=["Category", "Count"]
+                )
+                st.altair_chart(pie, use_container_width=True)
+                
+            with col_i2:
+                st.subheader("Data Quality")
+                other_count = type_df[type_df['Category'] == 'Other']['Count'].sum()
+                ratio = other_count / total_commits if total_commits > 0 else 0
+                st.metric("Unclassified Ratio", f"{ratio:.1%}")
+                
+                if ratio > 0.3:
+                    st.warning("High unclassified ratio. Consider updating classification rules.")
+                else:
+                    st.success("Good data quality.")
 
     except Exception as e:
         st.error(f"Visualization Error: {e}")

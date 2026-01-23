@@ -9,7 +9,7 @@ class AIAnalyst:
             base_url="https://api.siliconflow.cn/v1"
         )
 
-    def generate_assessment(self, repo_name, health_score, bus_factor_risk, intent_dist):
+    def generate_assessment(self, repo_name, health_score, bus_factor_risk, intent_dist, activity_trend):
         """
         生成项目诊断报告
 
@@ -35,6 +35,7 @@ class AIAnalyst:
         
         【核心数据】
         - 健康度评分：{health_score}/100
+        - 活跃度趋势：{activity_trend}
         - Bus Factor 风险：{"高危 (High Risk)" if bus_factor_risk else "安全 (Safe)"}
         - 工作重心分布：{intent_dist}
         """
